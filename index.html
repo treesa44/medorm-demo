@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Hospital Bed & Medicine Availability Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0b1220; --card:#0f172a; --muted:#94a3b8; --text:#e5efff;
+    --primary:#22d3ee; --primary-600:#0891b2; --accent:#22c55e; --warn:#f59e0b; --danger:#ef4444;
+    --ok:#10b981; --ok-2:#34d399; --grad1:#0ea5e9; --grad2:#22d3ee; --grad3:#14b8a6;
+  }
+  html,body{height:100%}
+  body{background:radial-gradient(1200px 800px at 80% -10%, rgba(34,211,238,.18), transparent 60%),
+                  radial-gradient(900px 600px at -10% 10%, rgba(20,184,166,.14), transparent 60%),
+                  var(--bg);
+       color:var(--text); font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
+  .glass{background:linear-gradient(180deg, rgba(15,23,42,.8), rgba(15,23,42,.6)); backdrop-filter: blur(10px); border:1px solid rgba(148,163,184,.12)}
+  .btn{transition:all .2s ease; border-radius:.75rem}
+  .btn-primary{background:linear-gradient(135deg,var(--grad1),var(--grad2)); color:#031524}
+  .btn-primary:hover{filter:brightness(1.05); transform:translateY(-1px)}
+  .btn-outline{border:1px solid rgba(148,163,184,.25); color:var(--text)}
+  .btn-outline:hover{border-color:rgba(148,163,184,.5); transform:translateY(-1px)}
+  .chip{font-size:.75rem; padding:.25rem .5rem; border-radius:999px; border:1px solid rgba(255,255,255,.08)}
+  .status-ok{background:rgba(16,185,129,.12); color:#b2f5dc; border-color:rgba(16,185,129,.35)}
+  .status-warn{background:rgba(245,158,11,.12); color:#fde7b1; border-color:rgba(245,158,11,.35)}
+  .status-danger{background:rgba(239,68,68,.14); color:#fecaca; border-color:rgba(239,68,68,.35)}
+  .status-mid{background:rgba(34,197,94,.12); color:#d1fae5; border-color:rgba(34,197,94,.3)}
+  .card{border-radius:1rem; box-shadow: 0 10px 30px rgba(0,0,0,.35)}
+  .header-shadow{box-shadow:0 8px 30px rgba(3,7,18,.5)}
+  .sticky-blur{backdrop-filter:saturate(140%) blur(10px)}
+  .grid-auto{display:grid; grid-template-columns: repeat(auto-fill,minmax(280px,1fr)); gap:1rem}
+  .pill{border-radius:999px}
+  .kbd{border:1px solid rgba(148,163,184,.25); padding:.1rem .4rem; border-radius:.4rem; font-size:.7rem; color:var(--muted)}
+  .divider{height:1px; background:linear-gradient(90deg, transparent, rgba(148,163,184,.25), transparent)}
+  .tab{cursor:pointer; padding:.5rem 1rem; border-radius:.6rem; border:1px solid transparent}
+  .tab.active{background:rgba(34,211,238,.14); border-color:rgba(34,211,238,.35); color:#ccfbf1}
+  .scrollbar::-webkit-scrollbar{height:8px; width:8px}
+  .scrollbar::-webkit-scrollbar-thumb{background:rgba(148,163,184,.25); border-radius:999px}
+  .role-badge{background:rgba(34,211,238,.14); border:1px solid rgba(34,211,238,.35)}
+  .ping-dot{position:relative}
+  .ping-dot::after{content:""; position:absolute; inset:-6px; border-radius:999px; border:2px solid var(--primary); animation:ping 1.5s infinite}
+  @keyframes ping{0%{transform:scale(.6); opacity:.8} 100%{transform:scale(1.6); opacity:0}}
+  .fade-in{animation:fade .4s ease both}
+  @keyframes fade{from{opacity:0; transform:translateY(8px)} to{opacity:1; transform:none}}
+  .mobile-panel{transition:transform .35s ease}
+  .tooltip{position:relative}
+  .tooltip:hover::after{content:attr(data-tip); position:absolute; bottom:120%; left:50%; transform:translateX(-50%);
+    background:#111827; color:#e5e7eb; padding:.35rem .55rem; border-radius:.5rem; white-space:nowrap;
+    border:1px solid rgba(255,255,255,.06); font-size:.75rem; box-shadow:0 10px 20px rgba(0,0,0,.35)}
+</style>
+</head>
+<body>
+  <header class="sticky top-0 z-40 sticky-blur header-shadow">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-teal-400 grid place-items-center text-slate-900 font-extrabold">H</div>
+          <div>
+            <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight">Hospital Bed & Medicine Tracker</h1>
+            <p class="text-xs text-slate-400 -mt-1">Real-time availability • 24/7</p>
+          </div>
+        </div>
+        <div class="hidden md:flex items-center gap-2">
+          <span class="chip role-badge">Citizen</span>
+          <span class="chip btn-outline tooltip" data-tip="Switch Role" id="roleToggle">Switch Role</span>
+          <button id="loginBtn" class="btn btn-primary px-4 py-2 text-sm">Secure Login</button>
+        </div>
+        <button class="md:hidden btn btn-outline px-3 py-2" id="mobileMenuBtn">Menu</button>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-3 overflow-x-auto scrollbar">
+      <button class="tab active" data-tab="citizen">Citizen View</button>
+      <button class="tab" data-tab="emergency">Ambulance/Emergency</button>
+      <button class="tab" data-tab="hospital">Hospital Staff</button>
+      <button class="tab" data-tab="admin">Government/Admin</button>
+      <button class="tab" data-tab="analytics">Analytics</button>
+      <div class="ml-auto flex items-center gap-2">
+        <span class="kbd">Ctrl</span><span class="kbd">K</span><span class="text-slate-400 text-sm">to search</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <!-- Search and Filters -->
+    <section class="glass card p-4 sm:p-6 fade-in">
+      <div class="flex flex-col lg:flex-row gap-4 items-start lg:items-end">
+        <div class="flex-1 w-full">
+          <label class="text-sm text-slate-300">Search by city, area, or hospital</label>
+          <div class="relative mt-1">
+            <input id="searchInput" class="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-cyan-400/50" placeholder="e.g., Downtown, Springfield, Mercy Hospital">
+            <div class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400">⌘K</div>
+          </div>
+        </div>
+        <div class="w-full lg:w-auto grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <select id="filterBed" class="bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2">
+            <option value="">Any Bed</option>
+            <option>General</option>
+            <option>ICU</option>
+            <option>ICU + Ventilator</option>
+            <option>Maternity</option>
+            <option>Pediatric</option>
+            <option>Emergency</option>
+          </select>
+          <select id="filterMedicine" class="bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2">
+            <option value="">Any Medicine</option>
+            <option>Adrenaline</option>
+            <option>Insulin</option>
+            <option>Antibiotics</option>
+            <option>Antivirals</option>
+            <option>Oxygen</option>
+          </select>
+          <select id="filterCategory" class="bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2">
+            <option value="">All Types</option>
+            <option>Government</option>
+            <option>Private</option>
+          </select>
+          <select id="filterEmergency" class="bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2">
+            <option value="">Emergency Support</option>
+            <option value="yes">Has ER</option>
+            <option value="ambulance">Ambulance Bay</option>
+          </select>
+        </div>
+      </div>
+      <div class="mt-4 flex flex-wrap gap-2">
+        <span class="chip">Live data <span class="ml-2 inline-flex h-2 w-2 bg-emerald-400 rounded-full ping-dot"></span></span>
+        <span class="chip">Verified sources</span>
+        <span class="chip">Auto-refresh</span>
+        <button id="resetFilters" class="chip btn-outline">Reset</button>
+      </div>
+    </section>
+
+    <!-- KPIs -->
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-4 fade-in">
+      <div class="glass card p-4">
+        <div class="text-slate-400 text-sm">Hospitals Online</div>
+        <div class="text-3xl font-extrabold" id="kpiHospitals">—</div>
+        <div class="text-xs text-emerald-300 mt-1">+ updated now</div>
+      </div>
+      <div class="glass card p-4">
+        <div class="text-slate-400 text-sm">Total Beds Available</div>
+        <div class="text-3xl font-extrabold" id="kpiBeds">—</div>
+        <div class="text-xs text-cyan-300 mt-1">across categories</div>
+      </div>
+      <div class="glass card p-4">
+        <div class="text-slate-400 text-sm">ICU + Ventilator</div>
+        <div class="text-3xl font-extrabold" id="kpiIcuVent">—</div>
+        <div class="text-xs text-amber-300 mt-1">critical capacity</div>
+      </div>
+      <div class="glass card p-4">
+        <div class="text-slate-400 text-sm">Medicines Critical</div>
+        <div class="text-3xl font-extrabold" id="kpiMedsCritical">—</div>
+        <div class="text-xs text-rose-300 mt-1">low/out of stock</div>
+      </div>
+    </section>
+
+    <!-- Tabs Content -->
+    <section id="tab-citizen" class="space-y-6 fade-in">
+      <div class="flex items-center justify-between">
+        <h2 class="font-bold text-xl">Nearby Hospitals</h2>
+        <div class="text-xs text-slate-400">Sorted by distance</div>
+      </div>
+      <div id="hospitalList" class="grid-auto"></div>
+    </section>
+
+    <section id="tab-emergency" class="space-y-4 hidden fade-in">
+      <div class="glass card p-4">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <h3 class="font-bold text-lg">Ambulance: Nearest Critical Care</h3>
+            <p class="text-slate-400 text-sm">Filters: ICU, Ventilator, ER</p>
+          </div>
+          <button id="quickRoute" class="btn btn-primary px-4 py-2">Find Fastest Route</button>
+        </div>
+        <div class="divider my-3"></div>
+        <div id="emergencyList" class="grid-auto"></div>
+      </div>
+    </section>
+
+    <section id="tab-hospital" class="space-y-4 hidden fade-in">
+      <div class="glass card p-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="font-bold text-lg">Hospital Staff Console</h3>
+            <p class="text-slate-400 text-sm">Update bed and medicine availability in real-time</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="chip status-ok">Verified</span>
+            <span class="chip">Last update <span id="staffLastUpdate">—</span></span>
+          </div>
+        </div>
+        <div class="mt-4 grid md:grid-cols-2 gap-4">
+          <div class="glass card p-4">
+            <h4 class="font-semibold mb-2">Bed Occupancy</h4>
+            <div class="space-y-3" id="bedUpdateForm"></div>
+            <button id="saveBeds" class="btn btn-primary w-full mt-3 py-2">Save Bed Updates</button>
+          </div>
+          <div class="glass card p-4">
+            <h4 class="font-semibold mb-2">Medicine Stock</h4>
+            <div class="space-y-3" id="medUpdateForm"></div>
+            <button id="saveMeds" class="btn btn-primary w-full mt-3 py-2">Save Medicine Updates</button>
+          </div>
+        </div>
+      </div>
+      <div class="glass card p-4">
+        <h4 class="font-semibold mb-2">Hospital Insights</h4>
+        <div class="grid md:grid-cols-3 gap-4">
+          <div class="col-span-2 bg-slate-900/40 rounded-xl p-3">
+            <canvas id="trendChart" height="120"></canvas>
+          </div>
+          <div class="bg-slate-900/40 rounded-xl p-4">
+            <div class="text-sm text-slate-400">Alerts</div>
+            <ul id="staffAlerts" class="mt-2 space-y-2 text-sm"></ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-admin" class="space-y-4 hidden fade-in">
+      <div class="glass card p-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="font-bold text-lg">Government & Admin Monitoring</h3>
+            <p class="text-slate-400 text-sm">Regional capacity, risk zones, and system health</p>
+          </div>
+          <div class="flex gap-2">
+            <button class="btn btn-outline px-3 py-2" id="simulateAlert">Simulate Alert</button>
+            <button class="btn btn-primary px-3 py-2">Export Report</button>
+          </div>
+        </div>
+        <div class="grid md:grid-cols-3 gap-4 mt-4">
+          <div class="bg-slate-900/40 rounded-xl p-3 col-span-2">
+            <canvas id="adminChart" height="110"></canvas>
+          </div>
+          <div class="bg-slate-900/40 rounded-xl p-4">
+            <div class="text-sm text-slate-400">System Status</div>
+            <ul class="mt-2 text-sm space-y-2" id="systemStatus"></ul>
+          </div>
+        </div>
+      </div>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="glass card p-4">
+          <h4 class="font-semibold mb-2">Regional Heat (sample)</h4>
+          <div class="text-slate-400 text-sm">High demand: Central, East</div>
+          <div class="mt-3 grid grid-cols-3 gap-2">
+            <div class="p-3 rounded-lg bg-rose-500/10 border border-rose-400/30">ICU strain</div>
+            <div class="p-3 rounded-lg bg-amber-500/10 border border-amber-400/30">ER load</div>
+            <div class="p-3 rounded-lg bg-emerald-500/10 border border-emerald-400/30">Beds OK</div>
+          </div>
+        </div>
+        <div class="glass card p-4">
+          <h4 class="font-semibold mb-2">Notifications</h4>
+          <ul id="adminNotifications" class="space-y-2 text-sm"></ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-analytics" class="space-y-4 hidden fade-in">
+      <div class="glass card p-4">
+        <div class="flex items-center justify-between">
+          <h3 class="font-bold text-lg">Analytics & Insights</h3>
+          <div class="text-sm text-slate-400">Decision-focused visuals</div>
+        </div>
+        <div class="grid md:grid-cols-3 gap-4 mt-4">
+          <div class="bg-slate-900/40 rounded-xl p-3">
+            <canvas id="occupancyArea" height="120"></canvas>
+          </div>
+          <div class="bg-slate-900/40 rounded-xl p-3">
+            <canvas id="medicineBar" height="120"></canvas>
+          </div>
+          <div class="bg-slate-900/40 rounded-xl p-3">
+            <canvas id="emergencyDoughnut" height="120"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Hospital Profile Drawer -->
+    <div id="profileDrawer" class="fixed inset-0 z-50 hidden">
+      <div class="absolute inset-0 bg-black/60"></div>
+      <div class="absolute right-0 top-0 h-full w-full sm:w-[480px] bg-slate-950 mobile-panel translate-x-full">
+        <div class="p-4 flex items-center justify-between border-b border-slate-800">
+          <div>
+            <div id="profileName" class="font-bold text-lg"></div>
+            <div id="profileType" class="text-xs text-slate-400"></div>
+          </div>
+          <button id="closeProfile" class="btn btn-outline px-3 py-1.5">Close</button>
+        </div>
+        <div class="p-4 space-y-4 overflow-y-auto h-[calc(100%-60px)] scrollbar">
+          <div class="glass card p-3">
+            <div class="text-sm text-slate-300">Address</div>
+            <div id="profileAddress" class="text-slate-200 mt-1"></div>
+            <div id="profileMap" class="mt-2 rounded-lg overflow-hidden">
+              <img src="https://maps.locationiq.com/v3/staticmap?key=pk.eyJ1Ijoic2FtcGxlIiwiYSI6ImNra2tra2tra2tra2traWcifQ==&center=37.7749,-122.4194&zoom=13&size=480x200&format=png&markers=icon:large-red-cutout|37.7749,-122.4194" alt="Map" class="w-full h-40 object-cover">
+            </div>
+          </div>
+          <div class="glass card p-3">
+            <div class="text-sm text-slate-300">Contact</div>
+            <div id="profileContact" class="mt-1"></div>
+            <div class="mt-2 flex gap-2">
+              <a id="callEmergency" href="#" class="btn btn-primary px-3 py-2 text-sm">Call ER</a>
+              <a id="callGeneral" href="#" class="btn btn-outline px-3 py-2 text-sm">Call Hospital</a>
+            </div>
+          </div>
+          <div class="glass card p-3">
+            <div class="text-sm text-slate-300 mb-2">Specialties</div>
+            <div id="profileSpecialties" class="flex flex-wrap gap-2"></div>
+          </div>
+          <div class="glass card p-3">
+            <div class="text-sm text-slate-300">Capacity</div>
+            <div id="profileCapacity" class="mt-2 grid grid-cols-2 gap-2"></div>
+          </div>
+          <div class="glass card p-3">
+            <div class="text-sm text-slate-300">Pharmacy</div>
+            <div id="profilePharmacy" class="mt-1"></div>
+          </div>
+          <div class="text-xs text-slate-400">Last updated: <span id="profileUpdated">—</span> • <span class="chip status-ok">Verified</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 hidden">
+      <div class="glass card px-4 py-3 flex items-center gap-3">
+        <div id="toastIcon" class="w-2 h-2 rounded-full bg-emerald-400"></div>
+        <div id="toastMsg" class="text-sm">Saved</div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="mt-8">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 text-sm text-slate-400">
+      <div class="divider mb-4"></div>
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div>© 2026 HealthGrid. Reliable, secure, and always on.</div>
+        <div class="flex gap-3">
+          <span class="chip">Data refresh: 30s</span>
+          <span class="chip">Uptime: 99.99%</span>
+          <span class="chip">ISO 27001</span>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+<script>
+  // Mock dataset
+  const hospitals = [
+    {
+      id:'h1', name:'Mercy General Hospital', type:'Government', city:'Springfield', area:'Downtown', distance:1.2,
+      address:'123 Health Ave, Springfield', coords:[37.7749,-122.4194],
+      contact:{er:'+1-555-0101', main:'+1-555-0199'},
+      specialties:['Cardiology','Neurology','Emergency','Maternity'],
+      emergency:true, ambulanceBay:true, verified:true,
+      beds:{
+        'General':{total:120, available:38},
+        'ICU':{total:24, available:6},
+        'ICU + Ventilator':{total:12, available:3},
+        'Maternity':{total:18, available:4},
+        'Pediatric':{total:20, available:9},
+        'Emergency':{total:10, available:2}
+      },
+      medicines:{
+        'Adrenaline':'High',
+        'Insulin':'Medium',
+        'Antibiotics':'Low',
+        'Antivirals':'High',
+        'Oxygen':'Medium'
+      },
+      pharmacy:{open:true, stockLevel:'Medium'},
+      updatedAt:Date.now()-1000*60*3
+    },
+    {
+      id:'h2', name:'St. Helena Care', type:'Private', city:'Springfield', area:'Westside', distance:3.5,
+      address:'48 West Dr, Springfield', coords:[37.7849,-122.4094],
+      contact:{er:'+1-555-0112', main:'+1-555-0188'},
+      specialties:['Orthopedics','ICU','Pediatrics'],
+      emergency:true, ambulanceBay:false, verified:true,
+      beds:{
+        'General':{total:80, available:12},
+        'ICU':{total:16, available:1},
+        'ICU + Ventilator':{total:10, available:0},
+        'Maternity':{total:10, available:1},
+        'Pediatric':{total:14, available:4},
+        'Emergency':{total:6, available:0}
+      },
+      medicines:{
+        'Adrenaline':'Low',
+        'Insulin':'Low',
+        'Antibiotics':'Medium',
+        'Antivirals':'Low',
+        'Oxygen':'Low'
+      },
+      pharmacy:{open:true, stockLevel:'Low'},
+      updatedAt:Date.now()-1000*60*8
+    },
+    {
+      id:'h3', name:'Riverside Medical Center', type:'Government', city:'Riverton', area:'Central', distance:6.8,
+      address:'9 River Pkwy, Riverton', coords:[37.7649,-122.4294],
+      contact:{er:'+1-555-0123', main:'+1-555-0177'},
+      specialties:['Emergency','Oncology','Dialysis'],
+      emergency:true, ambulanceBay:true, verified:false,
+      beds:{
+        'General':{total:140, available:74},
+        'ICU':{total:22, available:10},
+        'ICU + Ventilator':{total:8, available:4},
+        'Maternity':{total:12, available:7},
+        'Pediatric':{total:18, available:11},
+        'Emergency':{total:12, available:6}
+      },
+      medicines:{
+        'Adrenaline':'High',
+        'Insulin':'High',
+        'Antibiotics':'High',
+        'Antivirals':'Medium',
+        'Oxygen':'High'
+      },
+      pharmacy:{open:false, stockLevel:'High'},
+      updatedAt:Date.now()-1000*60*20
+    }
+  ];
+
+  // State
+  let role = 'Citizen';
+  let activeTab = 'citizen';
+  let selectedHospital = null;
+
+  // Utilities
+  function fmtTime(ts){
+    const d = new Date(ts);
+    return d.toLocaleString();
+  }
+  function statusChip(value){
+    const map = {
+      High: 'status-ok',
+      Medium: 'status-mid',
+      Low: 'status-warn',
+      'Out of stock': 'status-danger'
+    };
+    return `<span class="chip ${map[value]||'status-mid'}">${value}</span>`;
+  }
+  function bedBadge(count, total){
+    const ratio = total===0?0:count/total;
+    let cls = 'status-ok';
+    if(ratio<=0.15) cls='status-danger';
+    else if(ratio<=0.35) cls='status-warn';
+    return `<span class="chip ${cls}">${count}/${total}</span>`;
+  }
+  function sortByDistance(list){return [...list].sort((a,b)=>a.distance-b.distance);}
+
+  // Render hospital cards
+  function renderHospitals(){
+    const listEl = document.getElementById('hospitalList');
+    const q = document.getElementById('searchInput').value.toLowerCase();
+    const bed = document.getElementById('filterBed').value;
+    const med = document.getElementById('filterMedicine').value;
+    const cat = document.getElementById('filterCategory').value;
+    const er = document.getElementById('filterEmergency').value;
+
+    let filtered = hospitals.filter(h=>{
+      const matchQ = [h.name,h.city,h.area].join(' ').toLowerCase().includes(q);
+      const matchCat = !cat || h.type===cat;
+      const matchER = !er || (er==='yes' ? h.emergency : h.ambulanceBay);
+      const matchBed = !bed || (h.beds[bed] && h.beds[bed].available>0);
+      const matchMed = !med || (h.medicines[med] && h.medicines[med]!=='Out of stock');
+      return matchQ && matchCat && matchER && matchBed && matchMed;
+    });
+
+    filtered = sortByDistance(filtered);
+
+    listEl.innerHTML = filtered.map(h=>{
+      const totals = Object.values(h.beds).reduce((a,b)=>({total:a.total+b.total, avail:a.avail+b.available}),{total:0,avail:0});
+      const statusClass = totals.avail===0?'status-danger':(totals.avail/totals.total<=0.2?'status-warn':'status-ok');
+      return `
+        <div class="glass card p-4 hover:ring-2 hover:ring-cyan-400/30 transition">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 class="font-bold text-lg">${h.name}</h3>
+                ${h.verified?'<span class="chip status-ok">Verified</span>':'<span class="chip status-warn">Unverified</span>'}
+              </div>
+              <div class="text-sm text-slate-400">${h.type} • ${h.city} • ${h.area} • ${h.distance.toFixed(1)} km</div>
+            </div>
+            <div class="text-right">
+              <div class="chip ${statusClass}">Beds: ${totals.avail}/${totals.total}</div>
+              <div class="text-xs text-slate-400 mt-1">Updated ${timeAgo(h.updatedAt)}</div>
+            </div>
+          </div>
+          <div class="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+            ${['General','ICU','ICU + Ventilator','Maternity','Pediatric','Emergency'].map(k=>{
+              const b=h.beds[k]; if(!b) return '';
+              return `<div class="bg-slate-900/40 rounded-lg p-2">
+                        <div class="text-xs text-slate-400">${k}</div>
+                        <div class="mt-1">${bedBadge(b.available,b.total)}</div>
+                      </div>`;
+            }).join('')}
+          </div>
+          <div class="mt-3 flex flex-wrap gap-2">
+            ${Object.entries(h.medicines).slice(0,4).map(([m,v])=>`<span class="chip">${m}: ${statusChip(v)}</span>`).join('')}
+            <span class="chip ${h.pharmacy.open?'status-ok':'status-danger'}">Pharmacy: ${h.pharmacy.open?'Open':'Closed'}</span>
+          </div>
+          <div class="mt-4 flex items-center justify-between">
+            <div class="text-xs text-slate-400">ER: ${h.emergency?'Available':'N/A'} • Ambulance Bay: ${h.ambulanceBay?'Yes':'No'}</div>
+            <div class="flex gap-2">
+              <button class="btn btn-outline px-3 py-2 text-sm" onclick="openProfile('${h.id}')">View Profile</button>
+              <a href="tel:${h.contact.er}" class="btn btn-primary px-3 py-2 text-sm">Call ER</a>
+            </div>
+          </div>
+        </div>`;
+    }).join('') || `<div class="text-slate-400">No hospitals match the filters.</div>`;
+
+    updateKPIs(filtered);
+    renderEmergency(filtered);
+  }
+
+  function timeAgo(ts){
+    const diff = Math.floor((Date.now()-ts)/1000);
+    if(diff<60) return diff+'s ago';
+    if(diff<3600) return Math.floor(diff/60)+'m ago';
+    if(diff<86400) return Math.floor(diff/3600)+'h ago';
+    return Math.floor(diff/86400)+'d ago';
+  }
+
+  function updateKPIs(list){
+    const totalHosp = list.length;
+    let totalAvail=0, icuVent=0, medsCrit=0;
+    list.forEach(h=>{
+      Object.values(h.beds).forEach(b=>totalAvail+=b.available);
+      icuVent += h.beds['ICU + Ventilator']?h.beds['ICU + Ventilator'].available:0;
+      Object.values(h.medicines).forEach(v=>{ if(v==='Low' || v==='Out of stock') medsCrit++; });
+    });
+    document.getElementById('kpiHospitals').innerText = totalHosp;
+    document.getElementById('kpiBeds').innerText = totalAvail;
+    document.getElementById('kpiIcuVent').innerText = icuVent;
+    document.getElementById('kpiMedsCritical').innerText = medsCrit;
+  }
+
+  // Emergency view
+  function renderEmergency(list){
+    const el = document.getElementById('emergencyList');
+    const eligible = list.filter(h=> (h.beds['Emergency']?.available>0 || h.beds['ICU']?.available>0 || h.beds['ICU + Ventilator']?.available>0));
+    const sorted = sortByDistance(eligible).slice(0,6);
+    el.innerHTML = sorted.map(h=>{
+      const icu = h.beds['ICU']?.available||0;
+      const vent = h.beds['ICU + Ventilator']?.available||0;
+      const er = h.beds['Emergency']?.available||0;
+      return `<div class="glass card p-4">
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <div class="font-semibold">${h.name}</div>
+            <div class="text-xs text-slate-400">${h.distance.toFixed(1)} km • ${h.area}</div>
+          </div>
+          <div class="flex gap-1">
+            <span class="chip ${icu>0?'status-ok':'status-danger'}">ICU ${icu}</span>
+            <span class="chip ${vent>0?'status-ok':'status-danger'}">Vent ${vent}</span>
+            <span class="chip ${er>0?'status-ok':'status-danger'}">ER ${er}</span>
+          </div>
+        </div>
+        <div class="mt-3 flex items-center justify-between">
+          <a class="btn btn-primary px-3 py-2 text-sm" href="tel:${h.contact.er}">Call ER</a>
+          <button class="btn btn-outline px-3 py-2 text-sm" onclick="openProfile('${h.id}')">Details</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Profile drawer
+  function openProfile(id){
+    const h = hospitals.find(x=>x.id===id);
+    if(!h) return;
+    selectedHospital = h;
+    document.getElementById('profileName').innerText = h.name;
+    document.getElementById('profileType').innerText = `${h.type} • ${h.city} • ${h.area}`;
+    document.getElementById('profileAddress').innerText = h.address;
+    document.getElementById('profileContact').innerHTML = `
+      ER: <a class="text-cyan-300 underline" href="tel:${h.contact.er}">${h.contact.er}</a><br>
+      Hospital: <a class="text-cyan-300 underline" href="tel:${h.contact.main}">${h.contact.main}</a>`;
+    document.getElementById('callEmergency').href = 'tel:'+h.contact.er;
+    document.getElementById('callGeneral').href = 'tel:'+h.contact.main;
+    const spec = document.getElementById('profileSpecialties');
+    spec.innerHTML = h.specialties.map(s=>`<span class="chip">${s}</span>`).join('');
+    const cap = document.getElementById('profileCapacity');
+    cap.innerHTML = Object.entries(h.beds).map(([k,v])=>`
+      <div class="bg-slate-900/40 p-2 rounded-lg">
+        <div class="text-xs text-slate-400">${k}</div>
+        <div class="mt-1">${bedBadge(v.available,v.total)}</div>
+      </div>`).join('');
+    document.getElementById('profilePharmacy').innerHTML = `
+      Status: <span class="chip ${h.pharmacy.open?'status-ok':'status-danger'}">${h.pharmacy.open?'Open':'Closed'}</span>
+      <span class="ml-2">Stock:</span> ${statusChip(h.pharmacy.stockLevel)}`;
+    document.getElementById('profileUpdated').innerText = fmtTime(h.updatedAt);
+    // Map image
+    const [lat,lon]=h.coords;
+    const url=`https://maps.locationiq.com/v3/staticmap?key=pk.eyJ1Ijoic2FtcGxlIiwiYSI6ImNra2tra2tra2tra2traWcifQ==&center=${lat},${lon}&zoom=13&size=480x200&format=png&markers=icon:large-red-cutout|${lat},${lon}`;
+    document.querySelector('#profileMap img').src = url;
+
+    const drawer = document.getElementById('profileDrawer');
+    const panel = drawer.querySelector('.mobile-panel');
+    drawer.classList.remove('hidden');
+    requestAnimationFrame(()=>{ panel.classList.remove('translate-x-full'); });
+  }
+  function closeProfile(){
+    const drawer = document.getElementById('profileDrawer');
+    const panel = drawer.querySelector('.mobile-panel');
+    panel.classList.add('translate-x-full');
+    setTimeout(()=>drawer.classList.add('hidden'),300);
+  }
+
+  // Staff panel forms
+  function renderStaffForms(){
+    const host = hospitals[0]; // mock logged-in hospital
+    document.getElementById('staffLastUpdate').innerText = timeAgo(host.updatedAt);
+    const bedForm = document.getElementById('bedUpdateForm');
+    bedForm.innerHTML = Object.entries(host.beds).map(([k,v])=>`
+      <div class="flex items-center justify-between gap-2">
+        <div class="text-sm">${k}</div>
+        <div class="flex items-center gap-2">
+          <input type="number" min="0" value="${v.available}" data-bed="${k}"
+            class="w-20 bg-slate-900/60 border border-slate-700/50 rounded-lg px-2 py-1.5">
+          <span class="text-xs text-slate-400">/ ${v.total}</span>
+        </div>
+      </div>`).join('');
+    const medForm = document.getElementById('medUpdateForm');
+    const opts = ['High','Medium','Low','Out of stock'];
+    medForm.innerHTML = Object.entries(host.medicines).map(([k,v])=>`
+      <div class="flex items-center justify-between gap-2">
+        <div class="text-sm">${k}</div>
+        <select data-med="${k}" class="bg-slate-900/60 border border-slate-700/50 rounded-lg px-2 py-1.5">
+          ${opts.map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join('')}
+        </select>
+      </div>`).join('');
+    // Alerts
+    const alerts = document.getElementById('staffAlerts');
+    alerts.innerHTML = `
+      <li class="chip status-warn">ICU occupancy above 70%</li>
+      <li class="chip status-danger">Ventilator availability below 20%</li>
+      <li class="chip status-ok">Pharmacy audit passed</li>`;
+  }
+
+  function toast(msg,type='ok'){
+    const el = document.getElementById('toast');
+    const icon = document.getElementById('toastIcon');
+    const msgEl = document.getElementById('toastMsg');
+    msgEl.textContent = msg;
+    icon.className = 'w-2 h-2 rounded-full '+(type==='ok'?'bg-emerald-400':type==='warn'?'bg-amber-400':'bg-rose-400');
+    el.classList.remove('hidden');
+    setTimeout(()=>el.classList.add('hidden'),2000);
+  }
+
+  // Charts
+  let trendChart, adminChart, areaChart, barChart, doughnutChart;
+  function initCharts(){
+    const grid = {color:'rgba(148,163,184,.15)'}
+    const ticks = {color:'#94a3b8'}
+    const border = {color:'rgba(34,211,238,.6)', width:2}
+    const fillGrad = (ctx, from,to)=>{ const g=ctx.createLinearGradient(0,0,0,200); g.addColorStop(0,from); g.addColorStop(1,to); return g; }
+
+    // Staff trend
+    const ctx1 = document.getElementById('trendChart');
+    if(ctx1){
+      const g = ctx1.getContext('2d');
+      trendChart = new Chart(ctx1, {
+        type:'line',
+        data:{labels:['-5h','-4h','-3h','-2h','-1h','Now'],
+          datasets:[
+            {label:'Beds Available', data:[120,110,98,105,112,118], borderColor:'#22d3ee', backgroundColor:fillGrad(g,'rgba(34,211,238,.35)','rgba(34,211,238,.05)'), fill:true, tension:.35},
+            {label:'ICU', data:[18,16,14,12,13,15], borderColor:'#f59e0b', backgroundColor:fillGrad(g,'rgba(245,158,11,.35)','rgba(245,158,11,.02)'), fill:true, tension:.35}
+          ]},
+        options:{responsive:true, plugins:{legend:{labels:{color:'#cbd5e1'}}},
+          scales:{x:{grid}, y:{grid, ticks}}}
+      });
+    }
+    // Admin chart
+    const ctx2 = document.getElementById('adminChart');
+    if(ctx2){
+      adminChart = new Chart(ctx2, {
+        type:'bar',
+        data:{labels:['North','South','East','West','Central'],
+          datasets:[
+            {label:'Bed Availability', data:[320,270,180,260,150], backgroundColor:'rgba(34,197,94,.6)'},
+            {label:'ICU + Vent', data:[40,32,18,28,12], backgroundColor:'rgba(14,165,233,.6)'}
+          ]},
+        options:{responsive:true, plugins:{legend:{labels:{color:'#cbd5e1'}}},
+          scales:{x:{ticks, grid:{display:false}}, y:{ticks, grid}}}
+      });
+    }
+    // Analytics
+    const ctxA = document.getElementById('occupancyArea');
+    if(ctxA){
+      const g = ctxA.getContext('2d');
+      areaChart = new Chart(ctxA,{type:'line',
+        data:{labels:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+        datasets:[{label:'Occupancy %', data:[72,68,74,70,77,80,75], borderColor:'#22d3ee', backgroundColor:fillGrad(g,'rgba(34,211,238,.35)','rgba(34,211,238,.02)'), fill:true, tension:.35}]},
+        options:{plugins:{legend:{labels:{color:'#cbd5e1'}}}, scales:{x:{grid}, y:{grid,ticks}}}
+      });
+    }
+    const ctxB = document.getElementById('medicineBar');
+    if(ctxB){
+      barChart = new Chart(ctxB,{type:'bar',
+        data:{labels:['Adrenaline','Insulin','Antibiotics','Antivirals','Oxygen'],
+        datasets:[{label:'Usage Index', data:[65,52,78,40,88], backgroundColor:['#22d3ee','#34d399','#f59e0b','#a78bfa','#ef4444']}]},
+        options:{plugins:{legend:{labels:{color:'#cbd5e1'}}}, scales:{x:{ticks,grid:{display:false}}, y:{ticks,grid}}}
+      });
+    }
+    const ctxC = document.getElementById('emergencyDoughnut');
+    if(ctxC){
+      doughnutChart = new Chart(ctxC,{type:'doughnut',
+        data:{labels:['ER','ICU','Ventilator'],
+        datasets:[{data:[45,30,12], backgroundColor:['#22c55e','#22d3ee','#ef4444']}]},
+        options:{plugins:{legend:{labels:{color:'#cbd5e1'}}}}
+      });
+    }
+  }
+
+  // Role handling
+  function setRole(next){
+    role = next;
+    const badge = document.querySelector('.role-badge');
+    badge.textContent = role;
+    // Tabs visibility
+    document.querySelectorAll('[data-tab]').forEach(btn=>{
+      const val = btn.getAttribute('data-tab');
+      btn.classList.toggle('hidden', (role==='Citizen' && (val==='hospital'||val==='admin')) || (role==='Hospital' && val==='admin'));
+    });
+  }
+
+  // System status and notifications (admin)
+  function renderSystemStatus(){
+    const ul = document.getElementById('systemStatus');
+    ul.innerHTML = `
+      <li>Data feed: <span class="chip status-ok">Operational</span></li>
+      <li>Latency: <span class="chip">220ms</span></li>
+      <li>Verification: <span class="chip status-mid">87% verified</span></li>
+      <li>Sync: <span class="chip status-ok">Active</span></li>`;
+    const notif = document.getElementById('adminNotifications');
+    notif.innerHTML = `
+      <li class="chip status-warn">Central ICU nearing capacity</li>
+      <li class="chip status-danger">Antivirals shortage in East</li>
+      <li class="chip status-ok">Riverton stocks replenished</li>`;
+  }
+
+  // Event listeners
+  document.getElementById('resetFilters').addEventListener('click',()=>{
+    ['filterBed','filterMedicine','filterCategory','filterEmergency'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('searchInput').value='';
+    renderHospitals();
+  });
+  ['searchInput','filterBed','filterMedicine','filterCategory','filterEmergency'].forEach(id=>{
+    document.getElementById(id).addEventListener('input', renderHospitals);
+    document.getElementById(id).addEventListener('change', renderHospitals);
+  });
+
+  // Tabs
+  document.querySelectorAll('.tab').forEach(t=>{
+    t.addEventListener('click',()=>{
+      document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+      t.classList.add('active');
+      const name = t.getAttribute('data-tab');
+      activeTab = name;
+      ['citizen','hospital','admin','analytics','emergency'].forEach(n=>{
+        document.getElementById('tab-'+n).classList.toggle('hidden', n!==name);
+      });
+    });
+  });
+
+  // Role toggle (cycle through)
+  document.getElementById('roleToggle').addEventListener('click',()=>{
+    const order = ['Citizen','Hospital','Admin'];
+    const idx = (order.indexOf(role)+1)%order.length;
+    setRole(order[idx]);
+    toast('Switched role to '+order[idx],'ok');
+  });
+
+  // Login
+  document.getElementById('loginBtn').addEventListener('click',()=>{
+    setRole('Hospital');
+    document.querySelector('[data-tab="hospital"]').classList.remove('hidden');
+    document.querySelector('[data-tab="hospital"]').click();
+    toast('Logged in to Hospital Console','ok');
+  });
+
+  // Drawer controls
+  document.getElementById('closeProfile').addEventListener('click', closeProfile);
+  document.getElementById('profileDrawer').addEventListener('click',(e)=>{ if(e.target.id==='profileDrawer') closeProfile(); });
+
+  // Save actions
+  document.getElementById('saveBeds').addEventListener('click',()=>{
+    const host = hospitals[0];
+    document.querySelectorAll('[data-bed]').forEach(inp=>{
+      const k = inp.getAttribute('data-bed');
+      host.beds[k].available = Math.max(0, parseInt(inp.value||0));
+    });
+    host.updatedAt = Date.now();
+    renderHospitals();
+    document.getElementById('staffLastUpdate').innerText = timeAgo(host.updatedAt);
+    toast('Bed updates saved','ok');
+  });
+  document.getElementById('saveMeds').addEventListener('click',()=>{
+    const host = hospitals[0];
+    document.querySelectorAll('[data-med]').forEach(sel=>{
+      const k = sel.getAttribute('data-med');
+      host.medicines[k] = sel.value;
+    });
+    host.updatedAt = Date.now();
+    renderHospitals();
+    document.getElementById('staffLastUpdate').innerText = timeAgo(host.updatedAt);
+    toast('Medicine updates saved','ok');
+  });
+
+  // Admin simulate alert
+  document.getElementById('simulateAlert').addEventListener('click',()=>{
+    const notif = document.getElementById('adminNotifications');
+    const li = document.createElement('li');
+    li.className='chip status-danger';
+    li.textContent='New alert: Oxygen critical in West region';
+    notif.prepend(li);
+    toast('Critical alert dispatched','warn');
+  });
+
+  // Emergency quick route (demo)
+  document.getElementById('quickRoute').addEventListener('click',()=>{
+    const best = sortByDistance(hospitals.filter(h=>h.beds['Emergency'].available>0 || h.beds['ICU + Ventilator'].available>0))[0];
+    if(best) openProfile(best.id);
+    toast('Showing quickest option','ok');
+  });
+
+  // Keyboard shortcut for search
+  window.addEventListener('keydown',(e)=>{
+    if((e.ctrlKey || e.metaKey) && e.key.toLowerCase()==='k'){
+      e.preventDefault();
+      const input = document.getElementById('searchInput');
+      input.focus(); input.select();
+    }
+  });
+
+  // Auto refresh simulation
+  setInterval(()=>{
+    // Random small changes to simulate live updates
+    hospitals.forEach(h=>{
+      const b = h.beds['Emergency']; if(b){ b.available = Math.max(0, Math.min(b.total, b.available + (Math.random()>.7?1: (Math.random()>.5?-1:0)))); }
+      h.updatedAt = Date.now() - Math.floor(Math.random()*600000);
+    });
+    renderHospitals();
+  }, 30000);
+
+  // Init
+  document.addEventListener('DOMContentLoaded',()=>{
+    renderHospitals();
+    renderStaffForms();
+    initCharts();
+    renderSystemStatus();
+    setRole('Citizen');
+  });
+</script>
+</body>
+</html>
